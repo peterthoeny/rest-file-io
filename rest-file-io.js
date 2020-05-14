@@ -14,8 +14,8 @@ try {
 
 // modules
 const express = require('express');
-const fs = require('fs');
 const bodyParser = require('body-parser');
+const fs = require('fs');
 
 // globals
 var version = 'rest-file-io-2020-05-12';
