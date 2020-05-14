@@ -1,5 +1,11 @@
-/* rest-file-io: file I/O web-app to read an write files in registered directory IDs
- */
+// rest-file-io.js: REST File I/O API to securely read and write files in the file system
+// Copyright: Peter Thoeny, https://github.com/peterthoeny/rest-file-io
+// License: MIT
+
+// required modules
+const express = require('express');
+const bodyParser = require('body-parser');
+const fs = require('fs');
 
 // load rest-file-io configuration - it defines the conf variable
 try {
@@ -12,19 +18,14 @@ try {
     }
 }
 
-// modules
-const express = require('express');
-const bodyParser = require('body-parser');
-const fs = require('fs');
-
 // globals
-var version = 'rest-file-io-2020-05-12';
+var version = 'rest-file-io-2020-05-14';
 var app = express();
-var pathRe = new RegExp('^/api/1/file/[^/]+/([a-zA-Z0-9\\_\\-]+)/([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)(\\?.*)?$');
+var uriRe = new RegExp('^/api/1/file/[^/]+/([a-zA-Z0-9\\_\\-]+)/([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)(\\?.*)?$');
 
 function getUsage() {
     var usage = [
-        'REST File-I/O usage:',
+        'REST File I/O API usage:',
         '- Read file:  GET /api/1/file/read/<directoryID>/<fileName>',
         '  - <directoryID>: Directory ID',
         '  - <fileName>: File name; allowed characters: Alphanumeric, _, -, .',
@@ -37,7 +38,7 @@ function getUsage() {
         '  - message body is file content, such as CSV for spreadsheet file',
         '  - return if ok:    { "data": "", "error": "" }',
         '  - return if error: { "data": "", "error": "Could not write file <fileName> to directory with ID <directoryID>" }',
-        '  - directory must be writable by unix user theplan:users',
+        '  - directory must be writable by the rest-file-io application user',
         '- Lock file:       GET /api/1/file/lock/<directoryID>/<fileName>?action=lock',
         '  - return if ok:    { "data": 1, "error": "" }',
         '  - return if error: { "data": 0, "error": "Lock already exists for <fileName>" }',
@@ -59,7 +60,7 @@ function getUsage() {
         usage.push('  - return: { "data": [ "<file1>", "<file2>]" ], "error": "" }');
     }
     usage.push('- Version: ' + version);
-    usage.push('- Repository: https://github.com/peterthoeny/rest-file-io-js');
+    usage.push('- Documentation and repository: https://github.com/peterthoeny/rest-file-io');
     return usage;
 }
 
@@ -117,7 +118,7 @@ app.get('/api/1/file/list/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    if(!req.url.match(pathRe)) {
+    if(!req.url.match(uriRe)) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI: ' + req.url
@@ -125,7 +126,7 @@ app.get('/api/1/file/list/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(pathRe, '$1');
+    var directoryID = req.url.replace(uriRe, '$1');
     var directoryPath = getFilePath(directoryID, '');
     if(!directoryPath) {
         var body = {
@@ -171,7 +172,7 @@ app.get('/api/1/file/list/*', function (req, res) {
 });
 
 app.get('/api/1/file/read/*', function (req, res) {
-    if(!req.url.match(pathRe)) {
+    if(!req.url.match(uriRe)) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
@@ -179,8 +180,8 @@ app.get('/api/1/file/read/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(pathRe, '$1');
-    var fileName = req.url.replace(pathRe, '$2');
+    var directoryID = req.url.replace(uriRe, '$1');
+    var fileName = req.url.replace(uriRe, '$2');
     var filePath = getFilePath(directoryID, fileName);
     if(!filePath) {
         var body = {
@@ -226,7 +227,7 @@ app.get('/api/1/file/read/*', function (req, res) {
 });
 
 app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }), function (req, res) {
-    if(!req.url.match(pathRe)) {
+    if(!req.url.match(uriRe)) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
@@ -234,8 +235,8 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(pathRe, '$1');
-    var fileName = req.url.replace(pathRe, '$2');
+    var directoryID = req.url.replace(uriRe, '$1');
+    var fileName = req.url.replace(uriRe, '$2');
     var filePath = getFilePath(directoryID, fileName);
     if(!filePath) {
         var body = {
@@ -259,7 +260,7 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
 });
 
 app.get('/api/1/file/lock/*', function (req, res) {
-    if(!req.url.match(pathRe)) {
+    if(!req.url.match(uriRe)) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
@@ -267,8 +268,8 @@ app.get('/api/1/file/lock/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(pathRe, '$1');
-    var fileName = req.url.replace(pathRe, '$2');
+    var directoryID = req.url.replace(uriRe, '$1');
+    var fileName = req.url.replace(uriRe, '$2');
     var filePath = getFilePath(directoryID, fileName);
     if(!filePath) {
         var body = {
