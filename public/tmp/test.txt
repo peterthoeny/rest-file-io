@@ -1,0 +1,10 @@
+Test File - demo of rest-file-io REST API
+
+API:
+- read this file:
+  http://localhost:8070/api/1/file/read/tmp/test.txt?contentType=text/plain
+- write this file:
+  POST /api/1/file/read/tmp/test.txt?contentType=text/plain
+  where message body is file content
+
+// EOF
