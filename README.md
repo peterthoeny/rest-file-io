@@ -47,6 +47,7 @@ Modify the list of directory IDs in `rest-file-io.conf` located in `/etc` or the
 
 - Endpoint: `POST /api/1/file/write/<directoryID>/<fileName>`
   - Message body is file content, such as CSV data of a spreadsheet file
+  - Example: `curl -X POST -H 'Content-Type: text/plain' --data-binary @test.csv http://localhost:8070/api/1/file/write/tmp/test.csv`
   - Directory must be writable by application user
 - Return:
   - If ok:    `{ "data": "", "error": "" }`
