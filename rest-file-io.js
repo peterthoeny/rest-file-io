@@ -19,7 +19,7 @@ try {
 }
 
 // globals
-var version = 'rest-file-io-2020-05-14';
+var version = 'rest-file-io-2020-05-15';
 var app = express();
 var uriRe = new RegExp('^/api/1/file/[^/]+/([a-zA-Z0-9\\_\\-]+)/([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)(\\?.*)?$');
 
@@ -82,7 +82,7 @@ function sendResponse(url, body, res, contentType) {
         res.contentType('file.json');
         body = JSON.stringify(body, null, '    ');
     }
-    log(url + ', ' + JSON.stringify(body.replace(/[\n\r]+/g, ' ').replace(/^(.{100}).*(.{30})$/, '$1 ... $2')));
+    log(url + ', ' + JSON.stringify(body).replace(/\\[nr]/g, ' ').replace(/\s+/g, ' ').replace(/^(.{100}).*(.{30})$/, '$1 ... $2'));
     res.send(body);
 }
 
