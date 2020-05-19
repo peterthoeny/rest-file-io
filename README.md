@@ -88,10 +88,14 @@ Modify `rest-file-io.conf` located in `/etc` or the rest-file-io application dir
 
 ## Package Files
 
-- `rest-file-io.conf` - REST File I/O configuration template, copy to /etc and modify
-- `rest-file-io.js` - REST File I/O application
-- `public/favicon.ico` - favicon in case the API is used from a browser
+- `LICENSE` - MIT license file
+- `README.md` - documentation
+- `package.json` - package definition
+- `package-lock.json` - node_modules dependencies
+- `public/favicon.ico` - favicon, in case the API is used from a browser
 - `public/tmp/test.csv` - test CSV file to read & write
 - `public/tmp/test.txt` - test text file to read & write
+- `rest-file-io.conf` - REST File I/O configuration template, copy to /etc and modify
+- `rest-file-io.js` - REST File I/O application
 
 // EOF
