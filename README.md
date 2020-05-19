@@ -1,16 +1,16 @@
-# REST File I/O
+# REST File I/O (rest-file-io)
 
 [![GitHub issues](https://img.shields.io/github/issues/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/issues)
 [![GitHub stars](https://img.shields.io/github/stars/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/stargazers)
 [![GitHub license](https://img.shields.io/github/license/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/blob/master/LICENSE)
 
-rest-file-io is a node.js application to securely read and write files in the file system via a REST API, default port is 8070.
+rest-file-io is a node.js application to securely read and write files in the file system via a REST API.
 
 ## Getting Started
 
     $ git clone https://github.com/peterthoeny/rest-file-io.git # or clone your own fork
     $ cd rest-file-io
-    $ sudo cp -p rest-file-io.conf /etc
+    $ sudo cp -p rest-file-io.conf /etc    # modify as desired
     $ npm install
     $ node rest-file-io
 
@@ -20,14 +20,16 @@ Visit http://localhost:8070/ to access the REST File I/O API.
 
 The REST File I/O API is mainly intended to be used on an Intranet to automate processes.
 
-For security, only registered directories are available via the REST File I/O API. Directories are available via an ID (symbolic name), which point to the actual directory in the file system. Define the list of directory IDs in the `rest-file-io.conf.directories` setting. Example setting:
+For security, only registered directories are available via the REST File I/O API. Directories are available via an ID (symbolic name), which point to the actual directory in the file system. Define the list of directory IDs with the `directories` setting in `rest-file-io.conf`. Example setting:
 
     directories: {
-        example:    '/file/path/to/example',    // fix/add as needed
-        tmp:        './public/tmp'              // local rest-file-io directory for testing
+        example:    '/file/path/to/example',
+        tmp:        './public/tmp'
     },
 
-Modify the list of directory IDs in `rest-file-io.conf` located in `/etc` or the rest-file-io application directory. The referenced directories must be readable/writable by the rest-file-io application user.
+The `tmp` directiry is a local rest-file-io directory used for testing.
+
+Modify `rest-file-io.conf` located in `/etc` or the rest-file-io application directory. The referenced directories must be readable/writable by the rest-file-io application user.
 
 ### Read File
 
@@ -59,8 +61,8 @@ Modify the list of directory IDs in `rest-file-io.conf` located in `/etc` or the
   - Example: http://localhost:8070/api/1/file/lock/tmp/test.csv?action=lock
   - return if ok:    `{ "data": 1, "error": "" }`
   - return if error: `{ "data": 0, "error": "Lock already exists for <fileName>" }`
-  - In case there is a existing stale lock: Break lock if it is older than defined in `rest-file-io.conf.lockBreak` setting, default 60 sec
-  - In case there is a existing valid lock: Wait up to the time defined in `rest-file-io.conf.lockWait` setting, default 2.5 sec; an error is returned if not able to acquire a lock within that time
+  - In case there is a existing stale lock: Break lock if it is older than defined in `lockBreak` setting, default 60 sec
+  - In case there is a existing valid lock: Wait up to the time defined in `lockWait` setting, default 2.5 sec; an error is returned if not able to acquire a lock within that time
 - Unlock file endpoint: `GET /api/1/file/lock/<directoryID>/<fileName>?action=unlock`
   - Example: http://localhost:8070/api/1/file/lock/tmp/test.csv?action=unlock
   - return if ok:    `{ "data": 0, "error": "" }`
@@ -75,14 +77,14 @@ Modify the list of directory IDs in `rest-file-io.conf` located in `/etc` or the
 - Endpoint: `GET /api/1/file/directories`
   - Return: `{ "data": [ "<id1>", "<id2>" ], "error": "" }`
   - Example: http://localhost:8070/api/1/file/directories
-  - Available only if enabled with `rest-file-io.conf.allowDirList` setting
+  - Available only if enabled with `allowDirList` setting
 
 ### List Files in a Directory
 
 - Endpoint: `GET /api/1/file/list/<directoryID>/files`
   - return: `{ "data": [ "<file1>", "<file2>]" ], "error": "" }`
   - Example: http://localhost:8070/api/1/file/list/tmp/files
-  - Available only if enabled with `rest-file-io.conf.allowFileList` setting
+  - Available only if enabled with `allowFileList` setting
 
 ## Package Files
 
