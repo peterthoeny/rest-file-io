@@ -19,7 +19,7 @@ try {
 }
 
 // globals
-var version = 'rest-file-io-2020-05-15';
+var version = 'rest-file-io-2020-05-19';
 var app = express();
 var uriRe = new RegExp('^/api/1/file/[^/]+/([a-zA-Z0-9\\_\\-]+)/([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)(\\?.*)?$');
 
