@@ -1,6 +1,7 @@
 // rest-file-io.js: REST File I/O API to securely read and write files in the file system
+// Version:   1.1.0
 // Copyright: Peter Thoeny, https://github.com/peterthoeny/rest-file-io
-// License: MIT
+// License:   MIT
 
 // required modules
 const express = require('express');
@@ -17,18 +18,35 @@ try {
         require(__dirname + '/rest-file-io.conf');
     }
 }
+var arg1 = process.argv[2] || '';
+var arg2 = process.argv[3] || '';
+if(arg1 === '--port' && arg2) {
+    conf.port = Number(arg2);
+}
 
 // globals
-var version = 'rest-file-io-2020-05-19';
+var version = 'rest-file-io-2021-05-14';
 var app = express();
-var uriRe = new RegExp('^/api/1/file/[^/]+/([a-zA-Z0-9\\_\\-]+)/([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)(\\?.*)?$');
+var fileRe = new RegExp(
+    '^/api/1/file/[^/]+'                        // endpoint with verb, such as '/api/1/file/read'
+  + '/([a-zA-Z0-9\\_\\-]+)'                     // directory ID, such as '/' + 'tmp'
+  + '/([a-zA-Z0-9\\_\\-]+/)*'                   // optional subdirectory path, such as '/' + 'sub/sub-sub/'
+  + '([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)'  // file name, such as 'report.csv'
+  + '(\\?.*)?$'                                 // optional URI parameters
+);
+var listRe = new RegExp(
+    '^/api/1/file/list/'                        // endpoint with verb
+  + '([a-zA-Z0-9\\_\\-]+)'                      // directory ID, such as 'tmp'
+  + '(/[a-zA-Z0-9\\_\\-]+)*'                    // optional subdirectory path, such as '/' + 'sub/sub-sub'
+  + '/?(\\?.*)?$'                               // optional URI parameters
+);
 
 function getUsage() {
     var usage = [
         'REST File I/O API usage:',
         '- Read file:  GET /api/1/file/read/<directoryID>/<fileName>',
         '  - <directoryID>: Directory ID',
-        '  - <fileName>: File name; allowed characters: Alphanumeric, _, -, .',
+        '  - <fileName>: File name with optional subdirectory path; allowed characters: /, alphanumeric, _, -, .',
         '  - return if ok:    { "data": "....", "error": "" }',
         '  - return if error: { "error": "File <fileName> not found in ID <directoryID>" }',
         '  - optionally add content-type, such as:',
@@ -56,7 +74,8 @@ function getUsage() {
         usage.push('    ' + Object.keys(conf.directories).sort().join(', '));
     }
     if(conf.allowFileList) {
-        usage.push('- Query files in a directory:  GET /api/1/file/list/<directoryID>/files');
+        usage.push('- Query files in a directory:  GET /api/1/file/list/<directoryID>/<subdirs>');
+        usage.push('  - <subdirs>: Optional optional subdirectory path; allowed characters: /, alphanumeric, _, -, .');
         usage.push('  - return: { "data": [ "<file1>", "<file2>]" ], "error": "" }');
     }
     usage.push('- Version: ' + version);
@@ -86,13 +105,17 @@ function sendResponse(url, body, res, contentType) {
     res.send(body);
 }
 
-function getFilePath(directoryID, fileName) {
-    var filePath = conf.directories[directoryID];
-    if(filePath) {
-        filePath = filePath.replace(/^\.\//, __dirname + '/').replace(/\/$/, '');
-        filePath = filePath + '/' + fileName;
+function getDirectoryKey(directoryID, key, fileName) {
+    var val = '';
+    var dirObj = conf.directories[directoryID];
+    if(dirObj && dirObj[key]) {
+        var val = dirObj[key]
+        if(key === 'path') {
+            val = val.replace(/^\.\//, __dirname + '/').replace(/\/$/, '');
+            val = val + '/' + fileName;
+        }
     }
-    return filePath || '';
+    return val;
 }
 
 app.get('/api/1/file/directories*', function (req, res) {
@@ -118,7 +141,8 @@ app.get('/api/1/file/list/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    if(!req.url.match(uriRe)) {
+    var urlMatch = req.url.match(listRe);
+    if(!urlMatch) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI: ' + req.url
@@ -126,8 +150,9 @@ app.get('/api/1/file/list/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(uriRe, '$1');
-    var directoryPath = getFilePath(directoryID, '');
+    var directoryID = urlMatch[1];
+    var subdirs = urlMatch[2] || '';
+    var directoryPath = getDirectoryKey(directoryID, 'path', subdirs).replace(/\/+$/, '');
     if(!directoryPath) {
         var body = {
             data:   '',
@@ -135,6 +160,24 @@ app.get('/api/1/file/list/*', function (req, res) {
         }
         if(conf.allowDirList) {
             body.data = 'Available directory IDs: ' + Object.keys(conf.directories).sort().join(', ');
+        }
+        sendResponse(req.url, body, res);
+        return;
+    }
+    var allowListing = getDirectoryKey(directoryID, 'listing');
+    if(!allowListing) {
+        var body = {
+            data: '',
+            error: 'Sorry, file listing is disabled for ' + directoryID
+        }
+        sendResponse(req.url, body, res);
+        return;
+    }
+    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    if(!allowSubdirs && subdirs) {
+        var body = {
+            data: '',
+            error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;
@@ -153,7 +196,7 @@ app.get('/api/1/file/list/*', function (req, res) {
                     return;
                 }
                 pending++;
-                fs.stat(directoryPath + file, function(err, stats) {
+                fs.stat(directoryPath + '/' + file, function(err, stats) {
                     pending--;
                     if(!err && stats.isFile()) {
                         fileNames.push(file);
@@ -172,7 +215,8 @@ app.get('/api/1/file/list/*', function (req, res) {
 });
 
 app.get('/api/1/file/read/*', function (req, res) {
-    if(!req.url.match(uriRe)) {
+    var urlMatch = req.url.match(fileRe);
+    if(!urlMatch) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
@@ -180,9 +224,10 @@ app.get('/api/1/file/read/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(uriRe, '$1');
-    var fileName = req.url.replace(uriRe, '$2');
-    var filePath = getFilePath(directoryID, fileName);
+    var directoryID = urlMatch[1];
+    var subdirs = urlMatch[2] || '';
+    var fileName = urlMatch[3];
+    var filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
     if(!filePath) {
         var body = {
             data:   '',
@@ -190,6 +235,15 @@ app.get('/api/1/file/read/*', function (req, res) {
         }
         if(conf.allowDirList) {
             body.data = 'Available directory IDs: ' + Object.keys(conf.directories).sort().join(', ');
+        }
+        sendResponse(req.url, body, res);
+        return;
+    }
+    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    if(!allowSubdirs && subdirs) {
+        var body = {
+            data: '',
+            error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;
@@ -227,7 +281,8 @@ app.get('/api/1/file/read/*', function (req, res) {
 });
 
 app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }), function (req, res) {
-    if(!req.url.match(uriRe)) {
+    var urlMatch = req.url.match(fileRe);
+    if(!urlMatch) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
@@ -235,9 +290,10 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(uriRe, '$1');
-    var fileName = req.url.replace(uriRe, '$2');
-    var filePath = getFilePath(directoryID, fileName);
+    var directoryID = urlMatch[1];
+    var subdirs = urlMatch[2] || '';
+    var fileName = urlMatch[3];
+    var filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
     if(!filePath) {
         var body = {
             data:   '',
@@ -245,6 +301,15 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
         }
         if(conf.allowDirList) {
             body.data = 'Available directory IDs: ' + Object.keys(conf.directories).sort().join(', ');
+        }
+        sendResponse(req.url, body, res);
+        return;
+    }
+    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    if(!allowSubdirs && subdirs) {
+        var body = {
+            data: '',
+            error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;
@@ -260,7 +325,8 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
 });
 
 app.get('/api/1/file/lock/*', function (req, res) {
-    if(!req.url.match(uriRe)) {
+    var urlMatch = req.url.match(fileRe);
+    if(!urlMatch) {
         var body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
@@ -268,9 +334,10 @@ app.get('/api/1/file/lock/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = req.url.replace(uriRe, '$1');
-    var fileName = req.url.replace(uriRe, '$2');
-    var filePath = getFilePath(directoryID, fileName);
+    var directoryID = urlMatch[1];
+    var subdirs = urlMatch[2] || '';
+    var fileName = urlMatch[3];
+    var filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
     if(!filePath) {
         var body = {
             data:   '',
@@ -278,6 +345,15 @@ app.get('/api/1/file/lock/*', function (req, res) {
         }
         if(conf.allowDirList) {
             body.data = 'Available directory IDs: ' + Object.keys(conf.directories).sort().join(', ');
+        }
+        sendResponse(req.url, body, res);
+        return;
+    }
+    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    if(!allowSubdirs && subdirs) {
+        var body = {
+            data: '',
+            error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;

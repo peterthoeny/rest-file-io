@@ -1,6 +1,6 @@
 {
     "name": "rest-file-io",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "REST File I/O node.js application to securely read and write files in the file system",
     "author": "Peter Thoeny",
     "license": "MIT",
