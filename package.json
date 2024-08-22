@@ -1,6 +1,6 @@
 {
     "name": "rest-file-io",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "REST File I/O node.js application to securely read and write files in the file system",
     "author": "Peter Thoeny",
     "license": "MIT",
@@ -14,9 +14,8 @@
     "bugs": {
         "url": "https://github.com/peterthoeny/rest-file-io/issues"
     },
-    "devDependencies": {},
     "dependencies": {
-        "body-parser": "^1.19.0",
-        "express": "^4.17.1"
+        "body-parser": "1.20.x",
+        "express": "4.18.x"
     }
 }

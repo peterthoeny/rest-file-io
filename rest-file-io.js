@@ -1,5 +1,5 @@
 // rest-file-io.js: REST File I/O API to securely read and write files in the file system
-// Version:   1.1.0
+// Version:   1.1.1
 // Copyright: Peter Thoeny, https://github.com/peterthoeny/rest-file-io
 // License:   MIT
 
@@ -18,31 +18,45 @@ try {
         require(__dirname + '/rest-file-io.conf');
     }
 }
-var arg1 = process.argv[2] || '';
-var arg2 = process.argv[3] || '';
+const arg1 = process.argv[2] || '';
+const arg2 = process.argv[3] || '';
 if(arg1 === '--port' && arg2) {
     conf.port = Number(arg2);
 }
 
 // globals
-var version = 'rest-file-io-2021-05-14';
-var app = express();
-var fileRe = new RegExp(
+const version = 'rest-file-io-2021-05-14';
+const app = express();
+const fileRe = new RegExp(
     '^/api/1/file/[^/]+'                        // endpoint with verb, such as '/api/1/file/read'
   + '/([a-zA-Z0-9\\_\\-]+)'                     // directory ID, such as '/' + 'tmp'
   + '/([a-zA-Z0-9\\_\\-]+/)*'                   // optional subdirectory path, such as '/' + 'sub/sub-sub/'
   + '([a-zA-Z0-9\\_\\-][a-zA-Z0-9\\_\\-\\.]+)'  // file name, such as 'report.csv'
   + '(\\?.*)?$'                                 // optional URI parameters
 );
-var listRe = new RegExp(
+const listRe = new RegExp(
     '^/api/1/file/list/'                        // endpoint with verb
   + '([a-zA-Z0-9\\_\\-]+)'                      // directory ID, such as 'tmp'
   + '(/[a-zA-Z0-9\\_\\-]+)*'                    // optional subdirectory path, such as '/' + 'sub/sub-sub'
   + '/?(\\?.*)?$'                               // optional URI parameters
 );
 
+process.on('uncaughtException', (err) => {
+    log('rest-file-io app caught exception: ' + err);
+    process.exit();
+});
+
+['SIGINT', 'SIGTERM', 'SIGQUIT'].forEach(signal => process.on(signal, () => {
+    log('rest-file-io app terminates with ' + signal);
+    process.exit();
+}));
+
+process.on('exit', () => {
+    log('rest-file-io app exit');
+});
+
 function getUsage() {
-    var usage = [
+    let usage = [
         'REST File I/O API usage:',
         '- Read file:  GET /api/1/file/read/<directoryID>/<fileName>',
         '  - <directoryID>: Directory ID',
@@ -83,15 +97,19 @@ function getUsage() {
     return usage;
 }
 
-function log(msg) {
-    var now = new Date();
-    var prefix = '- '
+function log(msg, dontShorten) {
+    const now = new Date();
+    const prefix = '- '
         + now.getFullYear() + '-'
         + (now.getMonth() + 1).toString().replace(/^(.)$/, '0$1') + '-'
         + now.getDate().toString().replace(/^(.)$/, '0$1') + '-'
         + now.getHours().toString().replace(/^(.)$/, '0$1') + '-'
         + now.getMinutes().toString().replace(/^(.)$/, '0$1') + ': ';
-    console.log(prefix + msg.replace(/\n/g, '\n  '));
+    if(msg.length > 640 && !dontShorten) {
+        // don't use .replace(/^(.{512}).*(.{128})$/, '$1 .......... $2') due to performance
+        msg = msg.substring(0, 511) + ' ......... ' + msg.substring(msg.length - 128);
+    }
+    console.log(prefix + msg.replace(/\s+/g, ' '));
 }
 
 function sendResponse(url, body, res, contentType) {
@@ -99,17 +117,17 @@ function sendResponse(url, body, res, contentType) {
         res.set('Content-Type', contentType);
     } else {
         res.contentType('file.json');
-        body = JSON.stringify(body, null, '    ');
+        body = JSON.stringify(body, null, '  ');
     }
-    log(url + ', ' + JSON.stringify(body).replace(/\\[nr]/g, ' ').replace(/\s+/g, ' ').replace(/^(.{100}).*(.{30})$/, '$1 ... $2'));
+    log(url + ', ' + (typeof body === 'string' ? body : JSON.stringify(body)));
     res.send(body);
 }
 
 function getDirectoryKey(directoryID, key, fileName) {
-    var val = '';
-    var dirObj = conf.directories[directoryID];
+    let val = '';
+    const dirObj = conf.directories[directoryID];
     if(dirObj && dirObj[key]) {
-        var val = dirObj[key]
+        val = dirObj[key];
         if(key === 'path') {
             val = val.replace(/^\.\//, __dirname + '/').replace(/\/$/, '');
             val = val + '/' + fileName;
@@ -119,7 +137,7 @@ function getDirectoryKey(directoryID, key, fileName) {
 }
 
 app.get('/api/1/file/directories*', function (req, res) {
-    var body = {
+    let body = {
         data: '',
         error: 'Sorry, directory listing is disabled'
     }
@@ -134,27 +152,27 @@ app.get('/api/1/file/directories*', function (req, res) {
 
 app.get('/api/1/file/list/*', function (req, res) {
     if(!conf.allowFileList) {
-        var body = {
+        const body = {
             data: '',
             error: 'Sorry, file listing is disabled'
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var urlMatch = req.url.match(listRe);
+    const urlMatch = req.url.match(listRe);
     if(!urlMatch) {
-        var body = {
+        const body = {
             data: getUsage(),
             error: 'Unrecognized URI: ' + req.url
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = urlMatch[1];
-    var subdirs = urlMatch[2] || '';
-    var directoryPath = getDirectoryKey(directoryID, 'path', subdirs).replace(/\/+$/, '');
+    const directoryID = urlMatch[1];
+    const subdirs = urlMatch[2] || '';
+    const directoryPath = getDirectoryKey(directoryID, 'path', subdirs).replace(/\/+$/, '');
     if(!directoryPath) {
-        var body = {
+        const body = {
             data:   '',
             error:  'Unrecognized directory ID'
         }
@@ -164,18 +182,18 @@ app.get('/api/1/file/list/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var allowListing = getDirectoryKey(directoryID, 'listing');
+    const allowListing = getDirectoryKey(directoryID, 'listing');
     if(!allowListing) {
-        var body = {
+        const body = {
             data: '',
             error: 'Sorry, file listing is disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    const allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
     if(!allowSubdirs && subdirs) {
-        var body = {
+        const body = {
             data: '',
             error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
@@ -184,13 +202,13 @@ app.get('/api/1/file/list/*', function (req, res) {
     }
     fs.readdir(directoryPath, function (err, files) {
         if(err) {
-            var body = {
+            const body = {
                 error: 'Unable to get content of directory with ID ' + directoryID
             }
             sendResponse(req.url, body, res);
         } else {
-            var fileNames = [];
-            var pending = 0;
+            let fileNames = [];
+            let pending = 0;
             files.forEach(function(file) {
                 if(file.match(/^\./) || file.match(/\.lock$/)) {
                     return;
@@ -202,7 +220,7 @@ app.get('/api/1/file/list/*', function (req, res) {
                         fileNames.push(file);
                     }
                     if(!pending) {
-                        var body = {
+                        const body = {
                             data:   fileNames.sort(),
                             error:  ''
                         }
@@ -215,21 +233,21 @@ app.get('/api/1/file/list/*', function (req, res) {
 });
 
 app.get('/api/1/file/read/*', function (req, res) {
-    var urlMatch = req.url.match(fileRe);
+    const urlMatch = req.url.match(fileRe);
     if(!urlMatch) {
-        var body = {
+        const body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = urlMatch[1];
-    var subdirs = urlMatch[2] || '';
-    var fileName = urlMatch[3];
-    var filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
+    const directoryID = urlMatch[1];
+    const subdirs = urlMatch[2] || '';
+    const fileName = urlMatch[3];
+    const filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
     if(!filePath) {
-        var body = {
+        const body = {
             data:   '',
             error:  'Unrecognized directory ID'
         }
@@ -239,9 +257,9 @@ app.get('/api/1/file/read/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    const allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
     if(!allowSubdirs && subdirs) {
-        var body = {
+        const body = {
             data: '',
             error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
@@ -250,7 +268,7 @@ app.get('/api/1/file/read/*', function (req, res) {
     }
     fs.readFile(filePath, 'utf8', function(err, data) {
         if(err) {
-            var body = {
+            const body = {
                 error: 'File ' + fileName + ' not found with directory ID ' + directoryID
             }
             sendResponse(req.url, body, res);
@@ -262,7 +280,7 @@ app.get('/api/1/file/read/*', function (req, res) {
                     try {
                         data = JSON.parse(data);
                     } catch(e) {
-                        var body = {
+                        const body = {
                             data: data,
                             error: e.toString()
                         }
@@ -270,7 +288,7 @@ app.get('/api/1/file/read/*', function (req, res) {
                         return;
                     }
                 }
-                var body = {
+                const body = {
                     data:   data,
                     error:  ''
                 }
@@ -281,21 +299,21 @@ app.get('/api/1/file/read/*', function (req, res) {
 });
 
 app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }), function (req, res) {
-    var urlMatch = req.url.match(fileRe);
+    const urlMatch = req.url.match(fileRe);
     if(!urlMatch) {
-        var body = {
+        const body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = urlMatch[1];
-    var subdirs = urlMatch[2] || '';
-    var fileName = urlMatch[3];
-    var filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
+    const directoryID = urlMatch[1];
+    const subdirs = urlMatch[2] || '';
+    const fileName = urlMatch[3];
+    const filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
     if(!filePath) {
-        var body = {
+        const body = {
             data:   '',
             error:  'Unrecognized directory ID'
         }
@@ -305,18 +323,18 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
         sendResponse(req.url, body, res);
         return;
     }
-    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    const allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
     if(!allowSubdirs && subdirs) {
-        var body = {
+        const body = {
             data: '',
             error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var data = req.body;
+    const data = req.body;
     fs.writeFile(filePath, data, function(err) {
-        var body = {
+        const body = {
             data: '',
             error: err ? 'Could not write file ' + fileName + ' to directory with ID ' + directoryID : ''
         }
@@ -325,21 +343,21 @@ app.post('/api/1/file/write/*', bodyParser.text({ type: '*/*', limit: '50mb' }),
 });
 
 app.get('/api/1/file/lock/*', function (req, res) {
-    var urlMatch = req.url.match(fileRe);
+    const urlMatch = req.url.match(fileRe);
     if(!urlMatch) {
-        var body = {
+        const body = {
             data: getUsage(),
             error: 'Unrecognized URI, or missing/unsupported file name: ' + req.url
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var directoryID = urlMatch[1];
-    var subdirs = urlMatch[2] || '';
-    var fileName = urlMatch[3];
-    var filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
+    const directoryID = urlMatch[1];
+    const subdirs = urlMatch[2] || '';
+    const fileName = urlMatch[3];
+    const filePath = getDirectoryKey(directoryID, 'path', subdirs + fileName);
     if(!filePath) {
-        var body = {
+        const body = {
             data:   '',
             error:  'Unrecognized directory ID'
         }
@@ -349,39 +367,39 @@ app.get('/api/1/file/lock/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    var allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
+    const allowSubdirs = getDirectoryKey(directoryID, 'subdirs');
     if(!allowSubdirs && subdirs) {
-        var body = {
+        const body = {
             data: '',
             error: 'Sorry, subdirectories are disabled for ' + directoryID
         }
         sendResponse(req.url, body, res);
         return;
     }
-    var action = req.query.action;
-    var lockFile = filePath + '.lock';
+    const action = req.query.action;
+    const lockFile = filePath + '.lock';
     if(action === 'lock') {
         fs.symlink(filePath, lockFile, function(err) {
             if(err) {
                 // check age of symlink
                 fs.lstat(lockFile, function(err, stats) {
                     if(err) {
-                        var body = {
+                        const body = {
                             data:   0,
                             error:  'Error on existing lock on ' + fileName + ': ' + err
                         }
                         sendResponse(req.url, body, res);
                     } else {
-                        var fileTime = new Date(stats.mtime);
-                        var now = new Date();
-                        var age = parseInt((now.valueOf() - fileTime.valueOf()) / 1000);
-                        var lockBreak = Number(conf.lockBreak) || 60;
+                        const fileTime = new Date(stats.mtime);
+                        const now = new Date();
+                        const age = parseInt((now.valueOf() - fileTime.valueOf()) / 1000);
+                        const lockBreak = Number(conf.lockBreak) || 60;
                         if(age > lockBreak) {
                             // hijack stale lock
                             log('break stale lock for ' + fileName + ', age ' + age + ' > ' + lockBreak + ' sec');
                             fs.unlink(lockFile, function(err, stats) {
                                 fs.symlink(filePath, lockFile, function(err) {
-                                    var body = {
+                                    const body = {
                                         data:   1,
                                         error:  ''
                                     };
@@ -394,9 +412,9 @@ app.get('/api/1/file/lock/*', function (req, res) {
                             });
                         } else {
                             // has existing lock, try a few times
-                            var lockWait = (Number(conf.lockWait) || 2) * 10;   // unit 1/10 sec
+                            let lockWait = (Number(conf.lockWait) || 2) * 10;   // unit 1/10 sec
                             function tryLock(waited) {
-                                var randomTime = Math.round(Math.random() * (15 - 5)) + 5;
+                                const randomTime = Math.round(Math.random() * (15 - 5)) + 5;
                                 setTimeout(function() {
                                     waited += randomTime;
                                     fs.symlink(filePath, lockFile, function(err) {
@@ -404,7 +422,7 @@ app.get('/api/1/file/lock/*', function (req, res) {
                                             // success, we have the lock
                                             waited = Math.round(waited)/10;
                                             log('lock successful for ' + fileName + ' after ' + waited + ' sec wait');
-                                            var body = {
+                                            const body = {
                                                 data:   1,
                                                 error:  ''
                                             }
@@ -416,9 +434,9 @@ app.get('/api/1/file/lock/*', function (req, res) {
                                         } else {
                                             // give up
                                             lockWait = Math.round(lockWait)/10;
-                                            var msg = 'Cannot get lock for ' + fileName + ' after ' + lockWait + ' sec wait';
+                                            const msg = 'Cannot get lock for ' + fileName + ' after ' + lockWait + ' sec wait';
                                             log(msg);
-                                            var body = {
+                                            const body = {
                                                 data:   0,
                                                 error:  msg
                                             }
@@ -432,7 +450,7 @@ app.get('/api/1/file/lock/*', function (req, res) {
                     }
                 });
             } else {
-                var body = {
+                const body = {
                     data:   1,
                     error:  ''
                 }
@@ -442,7 +460,7 @@ app.get('/api/1/file/lock/*', function (req, res) {
         });
     } else if(action === 'unlock') {
         fs.unlink(lockFile, function(err, stats) {
-            var body = {
+            const body = {
                 data:   0,
                 error:  ''
             }
@@ -454,14 +472,14 @@ app.get('/api/1/file/lock/*', function (req, res) {
         });
     } else if(action === 'status') {
         fs.stat(lockFile, function(err, stats) {
-            var body = {
+            const body = {
                 data:   err ? 0 : 1,
                 error:  ''
             }
             sendResponse(req.url, body, res);
         });
     } else { // help
-        var body = {
+        const body = {
             data:   'Set parameter action=lock to lock, action=unlock to unlock, action=status to get lock status',
             error:  'Error'
         }
@@ -475,7 +493,7 @@ app.get('/favicon.ico', function (req, res) {
 });
 
 app.post('/*', function (req, res) {
-    var body = {
+    const body = {
         data: getUsage(),
         error: 'Unrecognized URI ' + req.url
     }
@@ -484,10 +502,10 @@ app.post('/*', function (req, res) {
 
 app.get('/*', function (req, res) {
     if(req.url === '/') {
-        var body = getUsage().join('\n');
+        const body = getUsage().join('\n');
         sendResponse(req.url, body, res, 'text/plain');
     } else {
-        var body = {
+        const body = {
             data: getUsage(),
             error:  'Unrecognized URI ' + req.url
         }
@@ -496,7 +514,7 @@ app.get('/*', function (req, res) {
 });
 
 app.listen(conf.port, function () {
-    log('rest-file-io app listening on port ' + conf.port);
+    log('rest-file-io app start, listening on port ' + conf.port);
 });
 
 // EOF

@@ -1,4 +1,4 @@
-# REST File I/O (rest-file-io) v1.1.0
+# REST File I/O (rest-file-io) v1.1.1
 
 [![GitHub issues](https://img.shields.io/github/issues/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/issues)
 [![GitHub stars](https://img.shields.io/github/stars/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/stargazers)
