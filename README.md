@@ -1,4 +1,4 @@
-# REST File I/O (rest-file-io) v1.1.1
+# REST File I/O (rest-file-io) v1.2.0
 
 [![GitHub issues](https://img.shields.io/github/issues/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/issues)
 [![GitHub stars](https://img.shields.io/github/stars/peterthoeny/rest-file-io)](https://github.com/peterthoeny/rest-file-io/stargazers)
@@ -20,9 +20,9 @@ Visit http://localhost:8070/ to access the REST File I/O API.
 
 ## REST File I/O API Documentation
 
-The REST File I/O API is RESTful wrapper to securely read and write files in the file system. It is mainly intended to be used in an Intranet to automate processes, such as to read and write .csv files from Google sheets.
+The REST File I/O API is a RESTful wrapper to securely read and write files in the file system. It is mainly intended to be used in an Intranet to automate processes, such as to read and write .csv files from Google sheets.
 
-For security, only registered directories are available via the REST File I/O API. Directories are exposed via an ID (symbolic name), which point to the actual directory in the file system. Define the list of directory IDs with the `directories` setting in `rest-file-io.conf`. See **Configration** below for details.
+For security, only registered directories are available via the REST File I/O API. Directories are exposed via an ID (symbolic name), which point to the actual directory in the file system. Define the list of directory IDs with the `directories` setting in `rest-file-io.conf`. See **Configuration** below for details.
 
 Modify `rest-file-io.conf` located in `/etc` or the rest-file-io application directory. The referenced directories must be readable/writable by the rest-file-io application user.
 
@@ -34,11 +34,14 @@ Modify `rest-file-io.conf` located in `/etc` or the rest-file-io application dir
   - Example: http://localhost:8070/api/1/file/read/tmp/test.csv
 - Return:
   - If ok: `{ "data": "<content>", "error": "" }`
-  - If error: `{ "error": "File <fileName> not found in ID <directoryID>" }`
+  - If error: `{ "error": "File <fileName> not found in directory with ID <directoryID>" }`
 - Optionally add a content-type:
   - Endpoint: `GET /api/1/file/read/tmp/test.txt?contentType=text/plain`
   - Example: http://localhost:8070/api/1/file/read/tmp/test.csv?contentType=text/plain
-  - Return: File content, delivered verbatimly with specified content-type
+  - Return: Raw file content with that content-type (not JSON)
+- Reading binary files:
+  - Binary files identified by extensions in `conf.binaryFiles.extensions` are returned as Base64 encoded text in `"data"`
+  - Clients can decode with `Buffer.from(data, 'base64')` or `atob` in the browser
 
 ### Write File
 
@@ -49,6 +52,8 @@ Modify `rest-file-io.conf` located in `/etc` or the rest-file-io application dir
 - Return:
   - If ok:    `{ "data": "", "error": "" }`
   - If error: `{ "data": "", "error": "Could not write file <fileName> to directory with ID <directoryID>" }`
+- Writing binary files:
+  - Not supported at this time
 
 ### File Locking
 
@@ -77,8 +82,8 @@ Modify `rest-file-io.conf` located in `/etc` or the rest-file-io application dir
 ### List Files in a Directory
 
 - Endpoint: `GET /api/1/file/list/<directoryID>/<subdirs>`
-  - `<subdirs>`: Optional subirectory path, available only if enabled with the `subdirs` directory setting
-  - return: `{ "data": [ "<file1>", "<file2>]" ], "error": "" }`
+  - `<subdirs>`: Optional subdirectory path, available only if enabled with the `subdirs` directory setting
+  - return: `{ "data": [ "<file1>", "<file2>" ], "error": "" }`
   - Example: http://localhost:8070/api/1/file/list/tmp/files
   - Available only if enabled with the `allowFileList` setting and the `listing` directory setting
 
@@ -101,7 +106,11 @@ conf = {
             comment:    'sandbox for testing'   // optional comment, such as directory owner
         }
     },
-    allowDirList:   1,      // 1: allow directory ID listing, /api/1/directories
+    binaryFiles: {
+        extensions: [ 'zip', 'gz', 'tar', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico',
+                      'exe', 'dll', 'so', 'dylib' ]
+    },
+    allowDirList:   1,      // 1: allow directory ID listing, /api/1/file/directories
     allowFileList:  1,      // 1: default allow file listing, /api/1/file/list/<directoryID>
     lockWait:       2.5,    // wait time in sec in case someone else has a lock
     lockBreak:      60,     // time in sec to hijack a stale lock

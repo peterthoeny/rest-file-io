@@ -1,7 +1,17 @@
-// rest-file-io.js: REST File I/O API to securely read and write files in the file system
-// Version:   1.1.1
-// Copyright: Peter Thoeny, https://github.com/peterthoeny/rest-file-io
-// License:   MIT
+/**
+ * @name            Peter Thoeny / REST-FILE-I/O / REST-FILE-I/O Script
+ * @tagline         REST-FILE-I/O API to securely read and write files in the file system
+ * @description     REST-FILE-I/O is a node.js application to securely read and write files in
+ *                  the file system via a REST API
+ * @file            peterthoeny/rest-file-io/rest-file-io.js
+ * @version         1.2.0
+ * @release         2026-03-23
+ * @author          Peter Thoeny, peter@thoeny.org
+ * @copyright       2020-2026, Peter Thoeny, TWiki.org
+ * @license         MIT
+ * @repository      https://github.com/peterthoeny/rest-file-io
+ * @genai           5%, Cursor 2.0, Composer 2
+ */
 
 // required modules
 const express = require('express');
@@ -40,6 +50,10 @@ const listRe = new RegExp(
   + '(/[a-zA-Z0-9\\_\\-]+)*'                    // optional subdirectory path, such as '/' + 'sub/sub-sub'
   + '/?(\\?.*)?$'                               // optional URI parameters
 );
+const binaryExtensionsRe = new RegExp(          // regular expression matching binary file extensions
+    `\\.(${conf.binaryFiles.extensions.join('|')})$`,
+    'i'
+);
 
 process.on('uncaughtException', (err) => {
     log('rest-file-io app caught exception: ' + err);
@@ -62,7 +76,7 @@ function getUsage() {
         '  - <directoryID>: Directory ID',
         '  - <fileName>: File name with optional subdirectory path; allowed characters: /, alphanumeric, _, -, .',
         '  - return if ok:    { "data": "....", "error": "" }',
-        '  - return if error: { "error": "File <fileName> not found in ID <directoryID>" }',
+        '  - return if error: { "error": "File <fileName> not found in directory with ID <directoryID>" }',
         '  - optionally add content-type, such as:',
         '    GET /api/1/file/read/tmp/test.txt?contentType=text/plain',
         '  - return if content-type specified: File content, delivered with content-type',
@@ -266,33 +280,47 @@ app.get('/api/1/file/read/*', function (req, res) {
         sendResponse(req.url, body, res);
         return;
     }
-    fs.readFile(filePath, 'utf8', function(err, data) {
+    // detect binary files by extension
+    const isBinary = binaryExtensionsRe.test(fileName);
+    const encoding = isBinary ? null : 'utf8';
+    fs.readFile(filePath, encoding, function(err, data) {
         if(err) {
             const body = {
-                error: 'File ' + fileName + ' not found with directory ID ' + directoryID
+                error: 'File ' + fileName + ' not found in directory with ID ' + directoryID
             }
             sendResponse(req.url, body, res);
         } else {
             if(req.query.contentType) {
                 sendResponse(req.url, data, res, req.query.contentType);
             } else {
-                if(data.match(/^\s*[\{\[][\s\S]*[\}\]]\s*$/)) {
-                    try {
-                        data = JSON.parse(data);
-                    } catch(e) {
-                        const body = {
-                            data: data,
-                            error: e.toString()
-                        }
-                        sendResponse(req.url, body, res);
-                        return;
+                if(isBinary) {
+                    // convert binary buffer to base64 string
+                    const base64Data = data.toString('base64');
+                    const body = {
+                        data:   base64Data,
+                        error:  ''
                     }
+                    sendResponse(req.url, body, res);
+                } else {
+                // handle text files
+                    if(data.match(/^\s*[\{\[][\s\S]*[\}\]]\s*$/)) {
+                        try {
+                            data = JSON.parse(data);
+                        } catch(e) {
+                            const body = {
+                                data: data,
+                                error: e.toString()
+                            }
+                            sendResponse(req.url, body, res);
+                            return;
+                        }
+                    }
+                    const body = {
+                        data:   data,
+                        error:  ''
+                    }
+                    sendResponse(req.url, body, res);
                 }
-                const body = {
-                    data:   data,
-                    error:  ''
-                }
-                sendResponse(req.url, body, res);
             }
         }
     });
